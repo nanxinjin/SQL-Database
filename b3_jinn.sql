@@ -1,0 +1,55 @@
+/*3.1*/
+ALTER SESSION SET NLS_DATE_FORMAT = 'HH24:MI:SS';
+
+CREATE OR REPLACE TRIGGER CHECKHALL
+	BEFORE INSERT OR UPDATE ON Showtimes
+
+	FOR EACH ROW
+	BEGIN
+		FOR EACHROW IN (SELECT * FROM Showtimes)
+		LOOP 
+			IF	:NEW.hall = EACHROW.hall AND :NEW.theaderID = EACHROW.theaterID AND ((:NEW.starttime < EACHROW.endtime) AND (:NEW.endtime > EACHROW.starttime))	
+			THEN	
+				RAISE_APPLICATION_ERROR(-20000, 'Two Movies CANNOT be screened in the same hall at the same time!');
+				ROLLBACK;
+			END IF;
+		END LOOP;
+
+	END;
+/
+
+/*3.2*/
+CREATE OR REPLACE TRIGGER CHECKADDTICKET
+	BEFORE INSERT OR UPDATE ON Tickets
+	FOR EACH ROW
+	BEGIN
+		FOR EACHTICKET IN (SELECT showID, (max_occupancy - userPerShow) AS SeatLeft FROM Showtimes NATURAL JOIN (SELECT showID, COUNT(userID) AS userPerShow FROM Showtimes NATURAL JOIN Tickets GROUP BY showID ORDER BY showID))
+		LOOP
+			IF :NEW.showID = EACHTICKET.showID AND EACHTICKET.SeatLeft<=0
+			THEN
+				RAISE_APPLICATION_ERROR(-20000, 'This show is FULL! No seats left!');
+				ROLLBACK;
+			END IF;
+		END LOOP;
+	END;
+/
+
+
+/*
+CREATE OR REPLACE TRIGGER CHECKLOWERMAX
+BEFORE INSERT OR UPDATE ON Showtimes
+*/
+CREATE OR REPLACE TRIGGER CHECKAMAX
+	BEFORE INSERT OR UPDATE ON Showtimes
+	FOR EACH ROW
+	BEGIN
+		FOR EACHMAX IN (SELECT showID, (max_occupancy - userPerShow) AS SeatLeft FROM Showtimes NATURAL JOIN (SELECT showID, COUNT(userID) AS userPerShow FROM Showtimes NATURAL JOIN Tickets GROUP BY showID ORDER BY showID))
+		LOOP
+			IF :NEW.showID = EACHMAX.showID AND EACHMAX.SeatLeft <= : NEW.max_occupancy
+			THEN
+				RAISE_APPLICATION_ERROR(-20000, 'MAX is lower than tickets booked!');
+				ROLLBACK;
+			END IF;
+		END LOOP;
+	END;
+/
